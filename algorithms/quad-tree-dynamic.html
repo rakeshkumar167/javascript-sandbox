@@ -1,0 +1,332 @@
+<html>
+    <head>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/0.7.2/p5.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/sketch.js/1.0/sketch.js"></script>
+        <script type="text/javascript">
+        var speed = 16;
+        var w =1200;
+        var h = 600;
+        var rectCount =0;
+        class Point {
+            constructor(id, x, y) {
+                this.id = id;
+                this.x = x;
+                this.y = y;
+                this.angle = Math.random()*2*(Math.PI);
+            }
+
+            move(){
+                
+                this.x=this.x+(speed*Math.sin(this.angle));
+                this.y=this.y+(speed*Math.cos(this.angle));
+
+                if(this.x<0){
+                    this.x=0;
+                    if(this.angle<(Math.PI/2)){
+                        this.angle = -1*this.angle;
+                    } else {
+                        this.angle = Math.PI*2 - this.angle;
+                    }
+                    
+                }
+                if(this.y<0){
+                    this.y=0;
+                    this.angle = Math.PI - this.angle;
+                }
+                if(this.y>h){
+                    this.y=h;
+                    if(this.angle>Math.PI){
+                        this.angle = 3*Math.PI-this.angle;
+                    }else {
+                        this.angle = Math.PI - this.angle;
+                    }
+                    
+                }
+                if(this.x>w){
+                    this.x=w;
+                    this.angle = -1*this.angle;
+                }
+            }
+
+            adjustTree(){
+                this.tree.remove(this);
+                this.tree.adjust(this);
+            }
+        }
+
+        class Rectangle {
+            constructor(x,y,h,w){
+                this.x = x;
+                this.y = y;
+                this.h = h;
+                this.w = w;
+            }
+
+            contains(point){
+                if(this.x+this.w>=point.x &&
+                    this.x-this.w<=point.x &&
+                    this.y+this.h>=point.y &&
+                    this.y-this.h<=point.y){
+                        return true;
+                }
+                return false;
+            }
+        }
+
+        class QuadTree {
+            constructor(boundary, n){
+                this.boundary = boundary;
+                this.capacity = n;
+                this.points =[];
+                this.isSplit =false;
+                this.id = rectCount++;
+            }
+            //Checks if point lies in the boundary of this node
+            contains(point){
+                if(this.boundary.contains(point)){
+                        return true;
+                }
+                return false;
+            }
+
+            splitTree(){
+                //console.log("splitting tree");
+                this.northeast = new QuadTree(new Rectangle(this.boundary.x+this.boundary.w/2, this.boundary.y-this.boundary.h/2,this.boundary.h/2, this.boundary.w/2), this.capacity);
+                this.northeast.parent = this;
+                this.northwest = new QuadTree(new Rectangle(this.boundary.x-this.boundary.w/2, this.boundary.y-this.boundary.h/2,this.boundary.h/2, this.boundary.w/2), this.capacity);
+                this.northwest.parent = this;
+                this.southeast = new QuadTree(new Rectangle(this.boundary.x+this.boundary.w/2, this.boundary.y+this.boundary.h/2,this.boundary.h/2, this.boundary.w/2), this.capacity);
+                this.southeast.parent = this;
+                this.southwest = new QuadTree(new Rectangle(this.boundary.x-this.boundary.w/2, this.boundary.y+this.boundary.h/2,this.boundary.h/2, this.boundary.w/2), this.capacity);
+                this.southwest.parent = this;
+            }
+            
+            areChildrenEmpty(){
+                
+                /*
+                if(this.points.length>0){
+                    return true;
+                }
+                */
+                if(this.northeast.areChildrenEmpty()||
+                this.northwest.areChildrenEmpty()||
+                this.southeast.areChildrenEmpty()||
+                this.southwest.areChildrenEmpty()){
+                    return true;
+                }
+                if(this.northeast.is)
+                return false;
+            }
+            
+            //returns true if either this node or its children contain any element
+            isEmpty(){
+                if(!this.isSplit){
+                    if(this.points.length>0){
+                        return false;
+                    }
+                    return true;
+                }
+                if(!this.northeast.isEmpty()||
+                !this.northwest.isEmpty()||
+                !this.southeast.isEmpty()||
+                !this.southwest.isEmpty()){
+                    return false;
+                }
+                return true;
+
+            }
+
+            removeEmptyChildNodes(){
+                if(!this.isSplit){
+                    return;
+                }
+                if(this.isEmpty()){
+                    //console.log("removing node");
+                    //this.northeast.parent = null;
+                    this.northeast =null;
+                    //this.northwest.parent = null;
+                    this.northwest =null;
+                    //this.southeast.parent = null;
+                    this.southeast = null;
+                    //this.southwest.parent = null;
+                    this.southwest = null;
+                    this.isSplit = false;
+                }
+            }
+
+            remove(point){
+                let newPoints = [];
+                for(let p of this.points){
+                    if(p.id != point.id){
+                        newPoints.push(p);
+                    }
+                }
+                this.points = newPoints;
+            }
+
+            hasPointStored(point){
+                for(let p of this.points){
+                    if(p.id == point.id){
+                        return true;
+                    }
+                }
+                return false;
+            }
+
+            adjust(point){
+                //console.log("Adjusting point "+point.id);
+                if(this.contains(point)){
+
+                    if(this.hasPointStored(point)) {//already contains this point -- do nothing
+                        return;
+                    }else {//try inserting
+                        this.insert(point);
+                        //console.log("changed parent");
+                    }
+                    
+                    return;
+                }else {
+                    this.parent.adjust(point);
+                    this.removeEmptyChildNodes();
+                }
+                
+            }
+
+            insert(point){
+                if(!this.contains(point)){
+                    return;
+                }
+                if(this.points.length < this.capacity ){
+                        this.points.push(point);
+                        point.tree = this;
+                        return true;
+                } else {
+                    if(!this.isSplit){
+                        this.splitTree();
+                        this.isSplit=true;
+                    }
+                    if(this.northeast.insert(point)||this.northwest.insert(point)||this.southeast.insert(point)||this.southwest.insert(point)){
+                        return true;
+                    }
+                    console.log("Something bad is happening");
+                    return false;//should never happen
+                }
+            }
+
+            query(range, results){
+                if(range.x-range.width>this.boundary.x+this.boundary.w||
+                    range.x+range.width<this.boundary.x-this.boundary.w||
+                    range.y-range.width>this.boundary.y+this.boundary.h||
+                    range.y+range.width<this.boundary.y-this.boundary.h){
+                        return;
+                }
+                for(let p of this.points){
+                    if(range.contains(p)){
+                        results.push(p);
+                    }
+                }
+                if(this.isSplit){
+                    this.northeast.query(range, results);
+                    this.northwest.query(range, results);
+                    this.southeast.query(range, results);
+                    this.southwest.query(range, results);
+                }
+
+
+            }
+
+            show(){
+                
+                stroke(255);
+                noFill();
+                strokeWeight(1);
+                //background(0, 25,55);
+                rectMode(CENTER);
+                rect(this.boundary.x, this.boundary.y, this.boundary.w*2, this.boundary.h*2);
+                stroke(0,100,100);
+                //text(this.id, this.boundary.x, this.boundary.y);
+                for(let p of this.points){
+                    stroke(255, 0,0);
+                    strokeWeight(4);
+                    point(p.x, p.y);
+                    
+                    //fill(255);
+                    
+                    //noStroke();
+                    //text(p.id+'-'+p.tree.id, p.x, p.y);
+                }
+                if(this.isSplit){
+                    this.northeast.show();
+                    this.northwest.show();
+                    this.southeast.show();
+                    this.southwest.show();
+                }
+
+            }
+        }
+
+        var tree;
+        var points = [];
+
+        function setup() {
+            createCanvas(w, h);
+            let boundary = new Rectangle(w/2, h/2, h/2, w/2);
+            tree = new QuadTree(boundary, 2);
+            console.log(tree);
+            initDisplay();
+            for(let i=0;i<10;i++){
+                let point = new Point(i, random(width), random(height));
+                tree.insert(point);
+                points.push(point);
+            }
+
+            tree.show();
+            
+            //queryAndShow();
+            
+        }
+
+        function initDisplay(){
+            background(0, 25,55);
+        }
+
+        function queryAndShow(){
+            stroke(255, 0,0);
+            strokeWeight(2);
+            rectMode(CENTER);
+            let range = new Rectangle(154+random(180), 167+random(180), 87, 126);
+            rect(range.x, range.y, range.w*2, range.h*2);
+
+            let results =[];
+            tree.query(range, results);
+
+            for(let p of results){
+                strokeWeight(4);
+                point(p.x, p.y);
+            }
+        }
+        
+        //setup();
+        
+        setInterval(function(){
+
+            //points[15].move();
+            //points[15].adjustTree();
+            
+            for(let p of points){
+                p.move();
+                p.adjustTree();
+                
+            }
+            clear();
+            initDisplay();
+            tree.show();
+        }, 500);
+        
+        </script>
+    </head>
+    <body>
+        <h1>Quad-tree implementation</h1>
+        <h4>Refresh page to see it in action</h4>
+    </body>
+</html>
